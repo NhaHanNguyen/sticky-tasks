@@ -6,45 +6,156 @@
   <title>Sticky Task Board</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
-    
   <main class="app">
+
     <header class="topbar">
-      <div class="brand">Sticky Tasks <span>• board</span></div>
-      <form class="composer" id="noteForm">
-        <label class="sr-only" for="taskInput">New task</label>
-        <input
-          id="taskInput"
-          maxlength="160"
-          autocomplete="off"
-          placeholder="Write a task..."
-        />
-        <button class="add-btn" type="submit">+ Add note</button>
-      </form>
+
+      <div class="brand">
+        Sticky Tasks <span>• board</span>
+      </div>
+
+      <div class="composer-area">
+
+        <form class="composer" id="noteForm">
+
+          <label class="sr-only" for="taskInput">
+            New task
+          </label>
+
+          <input
+            id="taskInput"
+            maxlength="160"
+            autocomplete="off"
+            placeholder="Write a task..."
+          />
+
+          <button class="add-btn" type="submit">
+            + Add note
+          </button>
+
+        </form>
+
+        <div
+          class="color-picker"
+          aria-label="Choose sticky note color"
+        >
+
+          <button
+            class="color-dot selected"
+            type="button"
+            data-color="1"
+            aria-label="Yellow note"
+            aria-pressed="true"
+          ></button>
+
+          <button
+            class="color-dot"
+            type="button"
+            data-color="2"
+            aria-label="Orange note"
+            aria-pressed="false"
+          ></button>
+
+          <button
+            class="color-dot"
+            type="button"
+            data-color="3"
+            aria-label="Green note"
+            aria-pressed="false"
+          ></button>
+
+          <button
+            class="color-dot"
+            type="button"
+            data-color="4"
+            aria-label="Blue note"
+            aria-pressed="false"
+          ></button>
+
+          <button
+            class="color-dot"
+            type="button"
+            data-color="5"
+            aria-label="Pink note"
+            aria-pressed="false"
+          ></button>
+
+        </div>
+
+      </div>
+
+      <div class="trash-counter" aria-live="polite">
+
+        <span class="counter-number" id="trashCount">
+          0
+        </span>
+
+        <span class="counter-label">
+          thrown away
+        </span>
+
+      </div>
+
     </header>
 
-    <section class="board" id="board" aria-label="Sticky note task board">
+
+    <section
+      class="board"
+      id="board"
+      aria-label="Sticky note task board"
+    >
       <div class="empty-state" id="emptyState">
-        <div class="scribble">✎</div>
-        <strong>Your board is empty</strong>
+
+        <div class="scribble">
+          ✎
+        </div>
+
+        <strong>
+          Your board is empty
+        </strong>
         Add a task above, then press and hold a sticky note to pick it up and move it.
       </div>
+      <div
+        class="trash-wrap"
+        id="trashWrap"
+        aria-hidden="true"
+      >
 
-      <div class="trash-wrap" id="trashWrap" aria-hidden="true">
         <div class="trash-zone" id="trashZone">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-            <path d="M3 6h18"/>
-            <path d="M8 6V4h8v2"/>
-            <path d="M19 6l-1 14H6L5 6"/>
-            <path d="M10 10v6"/>
-            <path d="M14 10v6"/>
+
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6l-1 14H6L5 6" />
+            <path d="M10 10v6" />
+            <path d="M14 10v6" />
           </svg>
+
         </div>
-        <div class="trash-label">Drop to delete</div>
+
+        <div class="trash-label">
+          Drop to delete
+        </div>
+
       </div>
 
-      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+      <div
+        class="toast"
+        id="toast"
+        role="status"
+        aria-live="polite"
+      ></div>
+
     </section>
+
   </main>
 
   <script src="script.js"></script>
