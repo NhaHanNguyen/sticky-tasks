@@ -1,4 +1,25 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+
 (() => {
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const googleProvider = new GoogleAuthProvider();
+
   const board = document.getElementById("board");
   const form = document.getElementById("noteForm");
   const input = document.getElementById("taskInput");
@@ -8,6 +29,12 @@
   const toast = document.getElementById("toast");
   const trashCountEl = document.getElementById("trashCount");
   const colorDots = Array.from(document.querySelectorAll(".color-dot"));
+
+  const googleSignIn = document.getElementById("googleSignIn");
+  const signOutButton = document.getElementById("signOutButton");
+  const userMenu = document.getElementById("userMenu");
+  const userPhoto = document.getElementById("userPhoto");
+  const userName = document.getElementById("userName");
 
   const STORAGE_KEY = "sticky-task-board-v1";
   const TRASH_COUNT_KEY = "sticky-task-board-trash-count-v1";
@@ -19,8 +46,12 @@
   let drag = null;
   let zCounter = 20;
   let toastTimer = null;
+  let cloudSaveTimer = null;
+  let currentUser = null;
+  let loadingCloudBoard = false;
 
   /* create unique id */
+
   function makeId() {
     if (crypto.randomUUID) {
       return crypto.randomUUID();
@@ -29,13 +60,16 @@
     return String(Date.now() + Math.random());
   }
 
-  /* load saved data */
-  function load() {
+  /* load guest data */
+
+  function loadGuestData() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
 
       if (Array.isArray(saved)) {
         notes = saved;
+      } else {
+        notes = [];
       }
     } catch {
       notes = [];
@@ -76,15 +110,146 @@
         }
       ];
 
-      saveNotes();
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(notes)
+      );
     }
 
+    updateZCounter();
     updateTrashCount();
-    renderAll();
+  }
+
+  /* update highest note layer */
+
+  function updateZCounter() {
+    const highestZ = notes.reduce(
+      (highest, note) =>
+        Math.max(
+          highest,
+          Number(note.z) || 0
+        ),
+      20
+    );
+
+    zCounter = highestZ;
+  }
+
+  /* get firestore board reference */
+
+  function getBoardReference(user = currentUser) {
+    if (!user) {
+      return null;
+    }
+
+    return doc(
+      db,
+      "users",
+      user.uid,
+      "boards",
+      "main"
+    );
+  }
+
+  /* load cloud board */
+
+  async function loadCloudBoard(user) {
+    loadingCloudBoard = true;
+
+    try {
+      const boardReference = getBoardReference(user);
+      const boardSnapshot = await getDoc(boardReference);
+
+      if (boardSnapshot.exists()) {
+        const data = boardSnapshot.data();
+
+        notes = Array.isArray(data.notes)
+          ? data.notes
+          : [];
+
+        trashCount =
+          Number.isFinite(data.trashCount) &&
+          data.trashCount >= 0
+            ? data.trashCount
+            : 0;
+
+        updateZCounter();
+        updateTrashCount();
+        renderAll();
+
+        showToast("Board synced");
+      } else {
+        await setDoc(boardReference, {
+          notes,
+          trashCount,
+          updatedAt: Date.now()
+        });
+
+        showToast("Your board is now synced");
+      }
+    } catch (error) {
+      console.error("Could not load cloud board:", error);
+
+      showToast("Could not load synced board");
+    } finally {
+      loadingCloudBoard = false;
+    }
+  }
+
+  /* save cloud board */
+
+  async function saveCloudBoard() {
+    if (
+      !currentUser ||
+      loadingCloudBoard
+    ) {
+      return;
+    }
+
+    try {
+      const boardReference =
+        getBoardReference(currentUser);
+
+      await setDoc(
+        boardReference,
+        {
+          notes,
+          trashCount,
+          updatedAt: Date.now()
+        },
+        {
+          merge: true
+        }
+      );
+    } catch (error) {
+      console.error("Could not sync board:", error);
+
+      showToast("Sync failed");
+    }
+  }
+
+  /* queue cloud save */
+
+  function queueCloudSave() {
+    if (!currentUser) {
+      return;
+    }
+
+    clearTimeout(cloudSaveTimer);
+
+    cloudSaveTimer = setTimeout(() => {
+      saveCloudBoard();
+    }, 250);
   }
 
   /* save notes */
+
   function saveNotes() {
+    if (currentUser) {
+      queueCloudSave();
+      return;
+    }
+
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify(notes)
@@ -92,7 +257,13 @@
   }
 
   /* save trash count */
+
   function saveTrashCount() {
+    if (currentUser) {
+      queueCloudSave();
+      return;
+    }
+
     localStorage.setItem(
       TRASH_COUNT_KEY,
       String(trashCount)
@@ -100,11 +271,14 @@
   }
 
   /* update trash counter */
+
   function updateTrashCount() {
-    trashCountEl.textContent = String(trashCount);
+    trashCountEl.textContent =
+      String(trashCount);
   }
 
   /* small message popup */
+
   function showToast(message) {
     toast.textContent = message;
     toast.classList.add("show");
@@ -116,15 +290,132 @@
     }, 1300);
   }
 
+  /* update account ui */
+
+  function updateAccountUI(user) {
+    if (!user) {
+      googleSignIn.classList.remove("hidden");
+      userMenu.classList.add("hidden");
+
+      userName.textContent = "";
+      userPhoto.removeAttribute("src");
+
+      return;
+    }
+
+    googleSignIn.classList.add("hidden");
+    userMenu.classList.remove("hidden");
+
+    userName.textContent =
+      user.displayName ||
+      user.email ||
+      "Signed in";
+
+    if (user.photoURL) {
+      userPhoto.src = user.photoURL;
+      userPhoto.alt =
+        `${user.displayName || "Google user"} profile picture`;
+
+      userPhoto.classList.remove("hidden");
+    } else {
+      userPhoto.classList.add("hidden");
+    }
+  }
+
+  /* google sign in */
+
+  googleSignIn.addEventListener(
+    "click",
+    async () => {
+      googleSignIn.disabled = true;
+
+      try {
+        await signInWithPopup(
+          auth,
+          googleProvider
+        );
+      } catch (error) {
+        console.error(
+          "Google sign-in failed:",
+          error
+        );
+
+        if (
+          error.code !==
+          "auth/popup-closed-by-user"
+        ) {
+          showToast(
+            "Google sign-in failed"
+          );
+        }
+      } finally {
+        googleSignIn.disabled = false;
+      }
+    }
+  );
+
+  /* sign out */
+
+  signOutButton.addEventListener(
+    "click",
+    async () => {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.error(
+          "Sign out failed:",
+          error
+        );
+
+        showToast(
+          "Could not sign out"
+        );
+      }
+    }
+  );
+
+  /* authentication state */
+
+  onAuthStateChanged(
+    auth,
+    async (user) => {
+      if (user) {
+        currentUser = user;
+
+        updateAccountUI(user);
+
+        await loadCloudBoard(user);
+
+        return;
+      }
+
+      currentUser = null;
+
+      updateAccountUI(null);
+
+      loadGuestData();
+      renderAll();
+
+      showToast("Using local board");
+    }
+  );
+
   /* empty board message */
+
   function updateEmptyState() {
-    emptyState.style.opacity = notes.length ? "0" : "1";
+    emptyState.style.opacity =
+      notes.length
+        ? "0"
+        : "1";
   }
 
   /* note size */
+
   function noteSize() {
     if (
-      window.matchMedia("(max-width: 620px)").matches
+      window.matchMedia(
+        "(max-width: 620px)"
+      ).matches
     ) {
       return {
         w: 160,
@@ -139,9 +430,13 @@
   }
 
   /* keep notes inside board bounds */
+
   function clampPosition(x, y) {
-    const rect = board.getBoundingClientRect();
-    const size = noteSize();
+    const rect =
+      board.getBoundingClientRect();
+
+    const size =
+      noteSize();
 
     const maxX = Math.max(
       8,
@@ -166,6 +461,7 @@
   }
 
   /* color selection */
+
   function setSelectedColor(color) {
     selectedColor = color;
 
@@ -186,6 +482,7 @@
   }
 
   /* render everything */
+
   function renderAll() {
     board
       .querySelectorAll(".sticky")
@@ -216,14 +513,22 @@
 
     element.className = "sticky";
     element.dataset.id = note.id;
-    element.dataset.color = note.color || "1";
-    element.style.left = note.x + "px";
-    element.style.top = note.y + "px";
-    element.style.zIndex = String(note.z || 1);
+    element.dataset.color =
+      note.color || "1";
+
+    element.style.left =
+      note.x + "px";
+
+    element.style.top =
+      note.y + "px";
+
+    element.style.zIndex =
+      String(note.z || 1);
 
     element.style.setProperty(
       "--rotation",
-      (Number(note.rotation) || 0) + "deg"
+      (Number(note.rotation) || 0) +
+        "deg"
     );
 
     element.tabIndex = 0;
@@ -236,20 +541,29 @@
     const text =
       document.createElement("span");
 
-    text.className = "task-text";
-    text.textContent = note.text;
+    text.className =
+      "task-text";
+
+    text.textContent =
+      note.text;
 
     const hint =
       document.createElement("span");
 
-    hint.className = "hint";
-    hint.textContent = "hold + drag";
+    hint.className =
+      "hint";
+
+    hint.textContent =
+      "hold + drag";
 
     const editButton =
       document.createElement("button");
 
-    editButton.type = "button";
-    editButton.className = "edit-btn";
+    editButton.type =
+      "button";
+
+    editButton.className =
+      "edit-btn";
 
     editButton.setAttribute(
       "aria-label",
@@ -280,6 +594,7 @@
       "click",
       (event) => {
         event.stopPropagation();
+
         editNote(note.id);
       }
     );
@@ -331,43 +646,57 @@
     );
   }
 
-  /* EDIT NOTE */
+  /* edit note */
+
   function editNote(id) {
     const note = notes.find(
-      (item) => item.id === id
+      (item) =>
+        item.id === id
     );
 
     if (!note) {
       return;
     }
 
-    const updated = window.prompt(
-      "Edit this task:",
-      note.text
-    );
+    const updated =
+      window.prompt(
+        "Edit this task:",
+        note.text
+      );
 
     if (updated === null) {
       return;
     }
 
-    const clean = updated.trim();
+    const clean =
+      updated.trim();
 
     if (!clean) {
-      showToast("Task cannot be empty");
+      showToast(
+        "Task cannot be empty"
+      );
+
       return;
     }
 
-    note.text = clean.slice(0, 160);
+    note.text =
+      clean.slice(0, 160);
 
     saveNotes();
     renderAll();
-    showToast("Task updated");
+
+    showToast(
+      "Task updated"
+    );
   }
 
   /* start hold */
+
   function startHold(event) {
     if (
-      event.target.closest(".edit-btn")
+      event.target.closest(
+        ".edit-btn"
+      )
     ) {
       return;
     }
@@ -384,7 +713,8 @@
 
     const note = notes.find(
       (item) =>
-        item.id === element.dataset.id
+        item.id ===
+        element.dataset.id
     );
 
     if (!note) {
@@ -396,7 +726,7 @@
 
     drag = {
       id: note.id,
-      element: element,
+      element,
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
@@ -416,58 +746,73 @@
       event.pointerId
     );
 
-    drag.timer = setTimeout(() => {
-      if (
-        !drag ||
-        drag.id !== note.id
-      ) {
-        return;
-      }
-
-      drag.active = true;
-      zCounter += 1;
-      note.z = zCounter;
-
-      element.style.zIndex =
-        String(zCounter);
-
-      element.classList.add(
-        "holding",
-        "primed"
-      );
-
-      if (navigator.vibrate) {
-        navigator.vibrate(12);
-      }
-
+    drag.timer =
       setTimeout(() => {
-        element.classList.remove(
+        if (
+          !drag ||
+          drag.id !== note.id
+        ) {
+          return;
+        }
+
+        drag.active = true;
+
+        zCounter += 1;
+
+        note.z =
+          zCounter;
+
+        element.style.zIndex =
+          String(zCounter);
+
+        element.classList.add(
+          "holding",
           "primed"
         );
-      }, 180);
-    }, HOLD_MS);
+
+        if (
+          navigator.vibrate
+        ) {
+          navigator.vibrate(12);
+        }
+
+        setTimeout(() => {
+          element.classList.remove(
+            "primed"
+          );
+        }, 180);
+      }, HOLD_MS);
   }
 
-  /*move note*/
+  /* move note */
+
   function movePointer(event) {
     if (
       !drag ||
-      event.pointerId !== drag.pointerId
+      event.pointerId !==
+        drag.pointerId
     ) {
       return;
     }
 
-    const distance = Math.hypot(
-      event.clientX - drag.startClientX,
-      event.clientY - drag.startClientY
-    );
+    const distance =
+      Math.hypot(
+        event.clientX -
+          drag.startClientX,
+        event.clientY -
+          drag.startClientY
+      );
 
     if (
       !drag.active &&
       distance > 10
     ) {
-      clearTimeout(drag.timer);
+      clearTimeout(
+        drag.timer
+      );
+
       cancelPointer();
+
       return;
     }
 
@@ -489,17 +834,21 @@
       return;
     }
 
-    const next = clampPosition(
-      event.clientX -
-        boardRect.left -
-        drag.offsetX,
-      event.clientY -
-        boardRect.top -
-        drag.offsetY
-    );
+    const next =
+      clampPosition(
+        event.clientX -
+          boardRect.left -
+          drag.offsetX,
+        event.clientY -
+          boardRect.top -
+          drag.offsetY
+      );
 
-    note.x = next.x;
-    note.y = next.y;
+    note.x =
+      next.x;
+
+    note.y =
+      next.y;
 
     drag.element.style.left =
       next.x + "px";
@@ -508,7 +857,9 @@
       next.y + "px";
 
     const overTrash =
-      isOverTrash(drag.element);
+      isOverTrash(
+        drag.element
+      );
 
     trashWrap.classList.toggle(
       "active",
@@ -516,20 +867,26 @@
     );
   }
 
-  /* drop note*/
+  /* drop note */
+
   function endPointer(event) {
     if (
       !drag ||
-      event.pointerId !== drag.pointerId
+      event.pointerId !==
+        drag.pointerId
     ) {
       return;
     }
 
-    clearTimeout(drag.timer);
+    clearTimeout(
+      drag.timer
+    );
 
     if (drag.active) {
       const overTrash =
-        isOverTrash(drag.element);
+        isOverTrash(
+          drag.element
+        );
 
       drag.element.classList.remove(
         "holding",
@@ -541,8 +898,11 @@
       );
 
       if (overTrash) {
-        const id = drag.id;
-        const element = drag.element;
+        const id =
+          drag.id;
+
+        const element =
+          drag.element;
 
         drag = null;
 
@@ -558,20 +918,24 @@
       saveNotes();
     }
 
-    drag.element.releasePointerCapture?.(
-      event.pointerId
-    );
+    drag.element
+      .releasePointerCapture?.(
+        event.pointerId
+      );
 
     drag = null;
   }
 
   /* cancel drag */
+
   function cancelPointer() {
     if (!drag) {
       return;
     }
 
-    clearTimeout(drag.timer);
+    clearTimeout(
+      drag.timer
+    );
 
     drag.element.classList.remove(
       "holding",
@@ -588,14 +952,17 @@
           drag.pointerId
         );
     } catch {
-      /* Nothing needed here */
+      /* nothing needed */
     }
 
     drag = null;
   }
 
   /* check trash collision */
-  function isOverTrash(noteElement) {
+
+  function isOverTrash(
+    noteElement
+  ) {
     const noteRect =
       noteElement.getBoundingClientRect();
 
@@ -611,37 +978,46 @@
       noteRect.height / 2;
 
     return (
-      centerX >= trashRect.left - 15 &&
-      centerX <= trashRect.right + 15 &&
-      centerY >= trashRect.top - 15 &&
-      centerY <= trashRect.bottom + 15
+      centerX >=
+        trashRect.left - 15 &&
+      centerX <=
+        trashRect.right + 15 &&
+      centerY >=
+        trashRect.top - 15 &&
+      centerY <=
+        trashRect.bottom + 15
     );
   }
 
-  /*delete note */
+  /* delete note */
+
   function deleteNote(
     id,
     element,
     countAsTrash
   ) {
-    const index = notes.findIndex(
-      (note) => note.id === id
-    );
+    const index =
+      notes.findIndex(
+        (note) =>
+          note.id === id
+      );
 
     if (index === -1) {
       return;
     }
 
-    notes.splice(index, 1);
-
-    saveNotes();
+    notes.splice(
+      index,
+      1
+    );
 
     if (countAsTrash) {
       trashCount += 1;
-
-      saveTrashCount();
-      updateTrashCount();
     }
+
+    saveNotes();
+    saveTrashCount();
+    updateTrashCount();
 
     element.classList.add(
       "deleting"
@@ -653,16 +1029,20 @@
 
     setTimeout(() => {
       element.remove();
+
       updateEmptyState();
     }, 330);
   }
 
   /* add new note */
+
   function addNote(text) {
-    const clean = text.trim();
+    const clean =
+      text.trim();
 
     if (!clean) {
       input.focus();
+
       return;
     }
 
@@ -672,48 +1052,52 @@
     const size =
       noteSize();
 
-    const randomRange = Math.max(
-      40,
-      rect.width -
-        size.w -
-        170
-    );
-
-    const x = Math.max(
-      110,
-      Math.min(
+    const randomRange =
+      Math.max(
+        40,
         rect.width -
           size.w -
-          20,
-        70 +
-          Math.random() *
-          randomRange
-      )
-    );
+          170
+      );
 
-    const maxY = Math.max(
-      60,
-      rect.height -
-        size.h -
-        30
-    );
+    const x =
+      Math.max(
+        110,
+        Math.min(
+          rect.width -
+            size.w -
+            20,
+          70 +
+            Math.random() *
+              randomRange
+        )
+      );
+
+    const maxY =
+      Math.max(
+        60,
+        rect.height -
+          size.h -
+          30
+      );
 
     zCounter += 1;
 
     const note = {
       id: makeId(),
-      text: clean.slice(0, 160),
-      x: x,
+      text:
+        clean.slice(0, 160),
+      x,
       y: Math.max(
         25,
         Math.min(
           maxY,
           35 +
             Math.random() *
-            Math.max(
-              30,
-              maxY - 35
-            )
+              Math.max(
+                30,
+                maxY - 35
+              )
         )
       ),
       rotation:
@@ -723,8 +1107,10 @@
             2.5
           ) * 10
         ) / 10,
-      color: selectedColor,
-      z: zCounter
+      color:
+        selectedColor,
+      z:
+        zCounter
     };
 
     notes.push(note);
@@ -739,7 +1125,10 @@
   }
 
   /* color button events */
-  for (const dot of colorDots) {
+
+  for (
+    const dot of colorDots
+  ) {
     dot.addEventListener(
       "click",
       () => {
@@ -751,30 +1140,41 @@
   }
 
   /* add note button */
+
   form.addEventListener(
     "submit",
     (event) => {
       event.preventDefault();
 
-      addNote(input.value);
+      addNote(
+        input.value
+      );
 
       input.value = "";
+
       input.focus();
     }
   );
 
   /* window resize */
+
   window.addEventListener(
     "resize",
     () => {
-      for (const note of notes) {
-        const pos = clampPosition(
-          note.x,
-          note.y
-        );
+      for (
+        const note of notes
+      ) {
+        const pos =
+          clampPosition(
+            note.x,
+            note.y
+          );
 
-        note.x = pos.x;
-        note.y = pos.y;
+        note.x =
+          pos.x;
+
+        note.y =
+          pos.y;
 
         const element =
           board.querySelector(
@@ -795,6 +1195,9 @@
   );
 
   /* start app */
+
   setSelectedColor("1");
-  load();
+
+  loadGuestData();
+  renderAll();
 })();
