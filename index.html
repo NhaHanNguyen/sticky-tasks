@@ -88,18 +88,6 @@
 
       <div class="topbar-right">
 
-        <div class="trash-counter" aria-live="polite">
-
-          <span class="counter-number" id="trashCount">
-            0
-          </span>
-
-          <span class="counter-label">
-            thrown away
-          </span>
-
-        </div>
-
         <div class="account-area">
 
           <button
@@ -144,7 +132,10 @@
 
             <div class="user-info">
 
-              <span id="userName" class="user-name"></span>
+              <span
+                id="userName"
+                class="user-name"
+              ></span>
 
               <button
                 id="signOutButton"
@@ -160,10 +151,27 @@
 
         </div>
 
+        <div
+          class="trash-counter"
+          aria-live="polite"
+        >
+
+          <span
+            class="counter-number"
+            id="trashCount"
+          >
+            0
+          </span>
+
+          <span class="counter-label">
+            thrown away
+          </span>
+
+        </div>
+
       </div>
 
     </header>
-
 
     <section
       class="board"
@@ -171,7 +179,10 @@
       aria-label="Sticky note task board"
     >
 
-      <div class="empty-state" id="emptyState">
+      <div
+        class="empty-state"
+        id="emptyState"
+      >
 
         <div class="scribble">
           ✎
@@ -191,7 +202,10 @@
         aria-hidden="true"
       >
 
-        <div class="trash-zone" id="trashZone">
+        <div
+          class="trash-zone"
+          id="trashZone"
+        >
 
           <svg
             viewBox="0 0 24 24"
@@ -225,6 +239,9 @@
 
   </main>
 
-  <script type="module" src="script.js"></script>
+  <script
+    type="module"
+    src="script.js"
+  ></script>
 </body>
 </html>
