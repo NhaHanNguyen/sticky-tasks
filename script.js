@@ -1,4 +1,7 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+
 import {
   getAuth,
   GoogleAuthProvider,
@@ -6,107 +9,273 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+
 import {
   getFirestore,
   doc,
   getDoc,
   setDoc
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
+
+/* firebase configuration */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC_ce9B8Gn9u8zBSqsIS8hsCKHcrgpYOgM",
+  authDomain: "sticky-tasks-233fc.firebaseapp.com",
+  projectId: "sticky-tasks-233fc",
+  storageBucket: "sticky-tasks-233fc.firebasestorage.app",
+  messagingSenderId: "1085233021954",
+  appId: "1:1085233021954:web:471508db6e3c4330cc531b"
+};
+
+const firebaseApp =
+  initializeApp(firebaseConfig);
+
+const auth =
+  getAuth(firebaseApp);
+
+const db =
+  getFirestore(firebaseApp);
+
+const googleProvider =
+  new GoogleAuthProvider();
 
 (() => {
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const googleProvider = new GoogleAuthProvider();
 
-  const board = document.getElementById("board");
-  const form = document.getElementById("noteForm");
-  const input = document.getElementById("taskInput");
-  const trashWrap = document.getElementById("trashWrap");
-  const trashZone = document.getElementById("trashZone");
-  const emptyState = document.getElementById("emptyState");
-  const toast = document.getElementById("toast");
-  const trashCountEl = document.getElementById("trashCount");
-  const colorDots = Array.from(document.querySelectorAll(".color-dot"));
+  /* elements */
 
-  const googleSignIn = document.getElementById("googleSignIn");
-  const signOutButton = document.getElementById("signOutButton");
-  const userMenu = document.getElementById("userMenu");
-  const userPhoto = document.getElementById("userPhoto");
-  const userName = document.getElementById("userName");
+  const board =
+    document.getElementById("board");
 
-  const STORAGE_KEY = "sticky-task-board-v1";
-  const TRASH_COUNT_KEY = "sticky-task-board-trash-count-v1";
-  const HOLD_MS = 110;
+  const form =
+    document.getElementById("noteForm");
+
+  const input =
+    document.getElementById("taskInput");
+
+  const trashWrap =
+    document.getElementById("trashWrap");
+
+  const trashZone =
+    document.getElementById("trashZone");
+
+  const emptyState =
+    document.getElementById("emptyState");
+
+  const toast =
+    document.getElementById("toast");
+
+  const trashCountEl =
+    document.getElementById("trashCount");
+
+  const colorDots =
+    Array.from(
+      document.querySelectorAll(".color-dot")
+    );
+
+  const googleSignIn =
+    document.getElementById("googleSignIn");
+
+  const userMenu =
+    document.getElementById("userMenu");
+
+  const userPhoto =
+    document.getElementById("userPhoto");
+
+  const userName =
+    document.getElementById("userName");
+
+  const signOutButton =
+    document.getElementById("signOutButton");
+
+  const backgroundInput =
+    document.getElementById("backgroundInput");
+
+  const backgroundButton =
+    document.getElementById("backgroundButton");
+
+  const removeBackgroundButton =
+    document.getElementById(
+      "removeBackgroundButton"
+    );
+
+  /* settings */
+
+  const STORAGE_KEY =
+    "sticky-task-board-v1";
+
+  const TRASH_COUNT_KEY =
+    "sticky-task-board-trash-count-v1";
+
+  const BACKGROUND_PREFIX =
+    "sticky-task-board-background-";
+
+  const HOLD_MS =
+    110;
+
+  const MAX_BACKGROUND_INPUT_SIZE =
+    8 * 1024 * 1024;
+
+  const MAX_BACKGROUND_WIDTH =
+    1800;
+
+  const MAX_BACKGROUND_HEIGHT =
+    1400;
+
+  /* state */
 
   let notes = [];
-  let trashCount = 0;
-  let selectedColor = "1";
-  let drag = null;
-  let zCounter = 20;
-  let toastTimer = null;
-  let cloudSaveTimer = null;
-  let currentUser = null;
-  let loadingCloudBoard = false;
+
+  let trashCount =
+    0;
+
+  let selectedColor =
+    "1";
+
+  let drag =
+    null;
+
+  let zCounter =
+    20;
+
+  let toastTimer =
+    null;
+
+  let cloudSaveTimer =
+    null;
+
+  let currentUser =
+    null;
+
+  let loadingCloudBoard =
+    false;
+
+  let hasCustomBackground =
+    false;
 
   /* create unique id */
 
   function makeId() {
-    if (crypto.randomUUID) {
+    if (
+      crypto.randomUUID
+    ) {
       return crypto.randomUUID();
     }
 
-    return String(Date.now() + Math.random());
+    return String(
+      Date.now() +
+      Math.random()
+    );
+  }
+
+  /* local background key */
+
+  function getBackgroundKey() {
+    if (
+      currentUser
+    ) {
+      return (
+        BACKGROUND_PREFIX +
+        currentUser.uid
+      );
+    }
+
+    return (
+      BACKGROUND_PREFIX +
+      "guest"
+    );
   }
 
   /* load guest data */
 
   function loadGuestData() {
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const saved =
+        JSON.parse(
+          localStorage.getItem(
+            STORAGE_KEY
+          )
+        );
 
-      if (Array.isArray(saved)) {
-        notes = saved;
+      if (
+        Array.isArray(saved)
+      ) {
+        notes =
+          saved;
       } else {
-        notes = [];
+        notes =
+          [];
       }
     } catch {
-      notes = [];
+      notes =
+        [];
     }
 
-    const savedTrashCount = Number(
-      localStorage.getItem(TRASH_COUNT_KEY)
-    );
+    const savedTrashCount =
+      Number(
+        localStorage.getItem(
+          TRASH_COUNT_KEY
+        )
+      );
 
     trashCount =
-      Number.isFinite(savedTrashCount) &&
+      Number.isFinite(
+        savedTrashCount
+      ) &&
       savedTrashCount >= 0
         ? savedTrashCount
         : 0;
 
     if (
-      localStorage.getItem(STORAGE_KEY) === null &&
+      localStorage.getItem(
+        STORAGE_KEY
+      ) === null &&
       !notes.length
     ) {
       notes = [
         {
-          id: makeId(),
-          text: "Drag me around ✨",
-          x: 90,
-          y: 72,
-          rotation: -2,
-          color: "1",
-          z: 1
+          id:
+            makeId(),
+
+          text:
+            "Drag me around ✨",
+
+          x:
+            90,
+
+          y:
+            72,
+
+          rotation:
+            -2,
+
+          color:
+            "1",
+
+          z:
+            1
         },
         {
-          id: makeId(),
-          text: "Hold me, then throw me in the trash 🗑️",
-          x: 320,
-          y: 160,
-          rotation: 2,
-          color: "3",
-          z: 2
+          id:
+            makeId(),
+
+          text:
+            "Hold me, then throw me in the trash 🗑️",
+
+          x:
+            320,
+
+          y:
+            160,
+
+          rotation:
+            2,
+
+          color:
+            "3",
+
+          z:
+            2
         }
       ];
 
@@ -117,28 +286,36 @@ import { firebaseConfig } from "./firebase-config.js";
     }
 
     updateZCounter();
+
     updateTrashCount();
   }
 
   /* update highest note layer */
 
   function updateZCounter() {
-    const highestZ = notes.reduce(
-      (highest, note) =>
-        Math.max(
-          highest,
-          Number(note.z) || 0
-        ),
-      20
-    );
+    const highestZ =
+      notes.reduce(
+        (highest, note) => {
+          return Math.max(
+            highest,
+            Number(note.z) || 0
+          );
+        },
+        20
+      );
 
-    zCounter = highestZ;
+    zCounter =
+      highestZ;
   }
 
-  /* get firestore board reference */
+  /* get cloud board reference */
 
-  function getBoardReference(user = currentUser) {
-    if (!user) {
+  function getBoardReference(
+    user = currentUser
+  ) {
+    if (
+      !user
+    ) {
       return null;
     }
 
@@ -153,46 +330,84 @@ import { firebaseConfig } from "./firebase-config.js";
 
   /* load cloud board */
 
-  async function loadCloudBoard(user) {
-    loadingCloudBoard = true;
+  async function loadCloudBoard(
+    user
+  ) {
+    loadingCloudBoard =
+      true;
 
     try {
-      const boardReference = getBoardReference(user);
-      const boardSnapshot = await getDoc(boardReference);
+      const boardReference =
+        getBoardReference(
+          user
+        );
 
-      if (boardSnapshot.exists()) {
-        const data = boardSnapshot.data();
+      const boardSnapshot =
+        await getDoc(
+          boardReference
+        );
 
-        notes = Array.isArray(data.notes)
-          ? data.notes
-          : [];
+      if (
+        boardSnapshot.exists()
+      ) {
+        const data =
+          boardSnapshot.data();
+
+        notes =
+          Array.isArray(
+            data.notes
+          )
+            ? data.notes
+            : [];
 
         trashCount =
-          Number.isFinite(data.trashCount) &&
+          Number.isFinite(
+            data.trashCount
+          ) &&
           data.trashCount >= 0
             ? data.trashCount
             : 0;
 
         updateZCounter();
+
         updateTrashCount();
+
         renderAll();
 
-        showToast("Board synced");
+        showToast(
+          "Board synced"
+        );
       } else {
-        await setDoc(boardReference, {
-          notes,
-          trashCount,
-          updatedAt: Date.now()
-        });
+        await setDoc(
+          boardReference,
+          {
+            notes:
+              notes,
 
-        showToast("Your board is now synced");
+            trashCount:
+              trashCount,
+
+            updatedAt:
+              Date.now()
+          }
+        );
+
+        showToast(
+          "Your board is now synced"
+        );
       }
     } catch (error) {
-      console.error("Could not load cloud board:", error);
+      console.error(
+        "Could not load cloud board:",
+        error
+      );
 
-      showToast("Could not load synced board");
+      showToast(
+        "Could not load synced board"
+      );
     } finally {
-      loadingCloudBoard = false;
+      loadingCloudBoard =
+        false;
     }
   }
 
@@ -208,45 +423,66 @@ import { firebaseConfig } from "./firebase-config.js";
 
     try {
       const boardReference =
-        getBoardReference(currentUser);
+        getBoardReference(
+          currentUser
+        );
 
       await setDoc(
         boardReference,
         {
-          notes,
-          trashCount,
-          updatedAt: Date.now()
+          notes:
+            notes,
+
+          trashCount:
+            trashCount,
+
+          updatedAt:
+            Date.now()
         },
         {
-          merge: true
+          merge:
+            true
         }
       );
     } catch (error) {
-      console.error("Could not sync board:", error);
+      console.error(
+        "Could not sync board:",
+        error
+      );
 
-      showToast("Sync failed");
+      showToast(
+        "Sync failed"
+      );
     }
   }
 
   /* queue cloud save */
 
   function queueCloudSave() {
-    if (!currentUser) {
+    if (
+      !currentUser
+    ) {
       return;
     }
 
-    clearTimeout(cloudSaveTimer);
+    clearTimeout(
+      cloudSaveTimer
+    );
 
-    cloudSaveTimer = setTimeout(() => {
-      saveCloudBoard();
-    }, 250);
+    cloudSaveTimer =
+      setTimeout(() => {
+        saveCloudBoard();
+      }, 250);
   }
 
   /* save notes */
 
   function saveNotes() {
-    if (currentUser) {
+    if (
+      currentUser
+    ) {
       queueCloudSave();
+
       return;
     }
 
@@ -259,8 +495,11 @@ import { firebaseConfig } from "./firebase-config.js";
   /* save trash count */
 
   function saveTrashCount() {
-    if (currentUser) {
+    if (
+      currentUser
+    ) {
       queueCloudSave();
+
       return;
     }
 
@@ -279,46 +518,86 @@ import { firebaseConfig } from "./firebase-config.js";
 
   /* small message popup */
 
-  function showToast(message) {
-    toast.textContent = message;
-    toast.classList.add("show");
+  function showToast(
+    message
+  ) {
+    toast.textContent =
+      message;
 
-    clearTimeout(toastTimer);
+    toast.classList.add(
+      "show"
+    );
 
-    toastTimer = setTimeout(() => {
-      toast.classList.remove("show");
-    }, 1300);
+    clearTimeout(
+      toastTimer
+    );
+
+    toastTimer =
+      setTimeout(() => {
+        toast.classList.remove(
+          "show"
+        );
+      }, 1500);
   }
 
-  /* update account ui */
+  /* update account display */
 
-  function updateAccountUI(user) {
-    if (!user) {
-      googleSignIn.classList.remove("hidden");
-      userMenu.classList.add("hidden");
+  function updateAccountUI(
+    user
+  ) {
+    if (
+      !user
+    ) {
+      googleSignIn.classList.remove(
+        "hidden"
+      );
 
-      userName.textContent = "";
-      userPhoto.removeAttribute("src");
+      userMenu.classList.add(
+        "hidden"
+      );
+
+      userName.textContent =
+        "";
+
+      userPhoto.removeAttribute(
+        "src"
+      );
 
       return;
     }
 
-    googleSignIn.classList.add("hidden");
-    userMenu.classList.remove("hidden");
+    googleSignIn.classList.add(
+      "hidden"
+    );
+
+    userMenu.classList.remove(
+      "hidden"
+    );
 
     userName.textContent =
       user.displayName ||
       user.email ||
       "Signed in";
 
-    if (user.photoURL) {
-      userPhoto.src = user.photoURL;
-      userPhoto.alt =
-        `${user.displayName || "Google user"} profile picture`;
+    if (
+      user.photoURL
+    ) {
+      userPhoto.src =
+        user.photoURL;
 
-      userPhoto.classList.remove("hidden");
+      userPhoto.alt =
+        `${
+          user.displayName ||
+          "Google user"
+        } profile picture`;
+
+      userPhoto.classList.remove(
+        "hidden"
+      );
     } else {
-      userPhoto.classList.add("hidden");
+      userPhoto.classList.add(
+        "hidden"
+      );
     }
   }
 
@@ -327,7 +606,8 @@ import { firebaseConfig } from "./firebase-config.js";
   googleSignIn.addEventListener(
     "click",
     async () => {
-      googleSignIn.disabled = true;
+      googleSignIn.disabled =
+        true;
 
       try {
         await signInWithPopup(
@@ -349,7 +629,8 @@ import { firebaseConfig } from "./firebase-config.js";
           );
         }
       } finally {
-        googleSignIn.disabled = false;
+        googleSignIn.disabled =
+          false;
       }
     }
   );
@@ -360,7 +641,9 @@ import { firebaseConfig } from "./firebase-config.js";
     "click",
     async () => {
       try {
-        await signOut(auth);
+        await signOut(
+          auth
+        );
       } catch (error) {
         console.error(
           "Sign out failed:",
@@ -379,24 +662,340 @@ import { firebaseConfig } from "./firebase-config.js";
   onAuthStateChanged(
     auth,
     async (user) => {
-      if (user) {
-        currentUser = user;
+      if (
+        user
+      ) {
+        currentUser =
+          user;
 
-        updateAccountUI(user);
+        updateAccountUI(
+          user
+        );
 
-        await loadCloudBoard(user);
+        loadBackground();
+
+        await loadCloudBoard(
+          user
+        );
 
         return;
       }
 
-      currentUser = null;
+      currentUser =
+        null;
 
-      updateAccountUI(null);
+      updateAccountUI(
+        null
+      );
 
       loadGuestData();
-      renderAll();
 
-      showToast("Using local board");
+      loadBackground();
+
+      renderAll();
+    }
+  );
+
+  /* apply background */
+
+  function applyBackground(
+    image
+  ) {
+    if (
+      !image
+    ) {
+      board.classList.remove(
+        "custom-background"
+      );
+
+      board.style.removeProperty(
+        "--board-background-image"
+      );
+
+      removeBackgroundButton.classList.add(
+        "hidden"
+      );
+
+      hasCustomBackground =
+        false;
+
+      return;
+    }
+
+    board.style.setProperty(
+      "--board-background-image",
+      `url("${image}")`
+    );
+
+    board.classList.add(
+      "custom-background"
+    );
+
+    removeBackgroundButton.classList.remove(
+      "hidden"
+    );
+
+    hasCustomBackground =
+      true;
+  }
+
+  /* load local background */
+
+  function loadBackground() {
+    const key =
+      getBackgroundKey();
+
+    const savedBackground =
+      localStorage.getItem(
+        key
+      );
+
+    applyBackground(
+      savedBackground
+    );
+  }
+
+  /* choose background */
+
+  backgroundButton.addEventListener(
+    "click",
+    () => {
+      backgroundInput.click();
+    }
+  );
+
+  /* background selected */
+
+  backgroundInput.addEventListener(
+    "change",
+    async () => {
+      const file =
+        backgroundInput.files[0];
+
+      if (
+        !file
+      ) {
+        return;
+      }
+
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ];
+
+      if (
+        !allowedTypes.includes(
+          file.type
+        )
+      ) {
+        showToast(
+          "Use JPG, PNG, or WEBP"
+        );
+
+        backgroundInput.value =
+          "";
+
+        return;
+      }
+
+      if (
+        file.size >
+        MAX_BACKGROUND_INPUT_SIZE
+      ) {
+        showToast(
+          "Image must be under 8 MB"
+        );
+
+        backgroundInput.value =
+          "";
+
+        return;
+      }
+
+      try {
+        showToast(
+          "Preparing background..."
+        );
+
+        const image =
+          await resizeBackgroundImage(
+            file
+          );
+
+        localStorage.setItem(
+          getBackgroundKey(),
+          image
+        );
+
+        applyBackground(
+          image
+        );
+
+        showToast(
+          currentUser
+            ? "Background saved on this device"
+            : "Background updated"
+        );
+      } catch (error) {
+        console.error(
+          "Could not save background:",
+          error
+        );
+
+        showToast(
+          "Could not save that image"
+        );
+      }
+
+      backgroundInput.value =
+        "";
+    }
+  );
+
+  /* resize background before saving */
+
+  function resizeBackgroundImage(
+    file
+  ) {
+    return new Promise(
+      (
+        resolve,
+        reject
+      ) => {
+        const reader =
+          new FileReader();
+
+        reader.onerror =
+          () => {
+            reject(
+              new Error(
+                "Could not read image"
+              )
+            );
+          };
+
+        reader.onload =
+          () => {
+            const image =
+              new Image();
+
+            image.onerror =
+              () => {
+                reject(
+                  new Error(
+                    "Could not open image"
+                  )
+                );
+              };
+
+            image.onload =
+              () => {
+                let width =
+                  image.width;
+
+                let height =
+                  image.height;
+
+                const scale =
+                  Math.min(
+                    1,
+                    MAX_BACKGROUND_WIDTH /
+                      width,
+                    MAX_BACKGROUND_HEIGHT /
+                      height
+                  );
+
+                width =
+                  Math.round(
+                    width * scale
+                  );
+
+                height =
+                  Math.round(
+                    height * scale
+                  );
+
+                const canvas =
+                  document.createElement(
+                    "canvas"
+                  );
+
+                canvas.width =
+                  width;
+
+                canvas.height =
+                  height;
+
+                const context =
+                  canvas.getContext(
+                    "2d"
+                  );
+
+                if (
+                  !context
+                ) {
+                  reject(
+                    new Error(
+                      "Canvas unavailable"
+                    )
+                  );
+
+                  return;
+                }
+
+                context.drawImage(
+                  image,
+                  0,
+                  0,
+                  width,
+                  height
+                );
+
+                const compressed =
+                  canvas.toDataURL(
+                    "image/jpeg",
+                    0.78
+                  );
+
+                resolve(
+                  compressed
+                );
+              };
+
+            image.src =
+              reader.result;
+          };
+
+        reader.readAsDataURL(
+          file
+        );
+      }
+    );
+  }
+
+  /* remove background */
+
+  removeBackgroundButton.addEventListener(
+    "click",
+    () => {
+      if (
+        !hasCustomBackground
+      ) {
+        return;
+      }
+
+      localStorage.removeItem(
+        getBackgroundKey()
+      );
+
+      applyBackground(
+        null
+      );
+
+      showToast(
+        "Background removed"
+      );
     }
   );
 
@@ -418,56 +1017,86 @@ import { firebaseConfig } from "./firebase-config.js";
       ).matches
     ) {
       return {
-        w: 160,
-        h: 140
+        w:
+          160,
+
+        h:
+          140
       };
     }
 
     return {
-      w: 190,
-      h: 160
+      w:
+        190,
+
+      h:
+        160
     };
   }
 
-  /* keep notes inside board bounds */
+  /* keep notes inside board */
 
-  function clampPosition(x, y) {
+  function clampPosition(
+    x,
+    y
+  ) {
     const rect =
       board.getBoundingClientRect();
 
     const size =
       noteSize();
 
-    const maxX = Math.max(
-      8,
-      rect.width - size.w - 8
-    );
+    const maxX =
+      Math.max(
+        8,
+        rect.width -
+          size.w -
+          8
+      );
 
-    const maxY = Math.max(
-      8,
-      rect.height - size.h - 8
-    );
+    const maxY =
+      Math.max(
+        8,
+        rect.height -
+          size.h -
+          8
+      );
 
     return {
-      x: Math.max(
-        8,
-        Math.min(x, maxX)
-      ),
-      y: Math.max(
-        8,
-        Math.min(y, maxY)
-      )
+      x:
+        Math.max(
+          8,
+          Math.min(
+            x,
+            maxX
+          )
+        ),
+
+      y:
+        Math.max(
+          8,
+          Math.min(
+            y,
+            maxY
+          )
+        )
     };
   }
 
   /* color selection */
 
-  function setSelectedColor(color) {
-    selectedColor = color;
+  function setSelectedColor(
+    color
+  ) {
+    selectedColor =
+      color;
 
-    for (const dot of colorDots) {
+    for (
+      const dot of colorDots
+    ) {
       const isSelected =
-        dot.dataset.color === color;
+        dot.dataset.color ===
+        color;
 
       dot.classList.toggle(
         "selected",
@@ -476,7 +1105,9 @@ import { firebaseConfig } from "./firebase-config.js";
 
       dot.setAttribute(
         "aria-pressed",
-        String(isSelected)
+        String(
+          isSelected
+        )
       );
     }
   }
@@ -485,13 +1116,21 @@ import { firebaseConfig } from "./firebase-config.js";
 
   function renderAll() {
     board
-      .querySelectorAll(".sticky")
-      .forEach((element) => {
-        element.remove();
-      });
+      .querySelectorAll(
+        ".sticky"
+      )
+      .forEach(
+        (element) => {
+          element.remove();
+        }
+      );
 
-    for (const note of notes) {
-      renderNote(note);
+    for (
+      const note of notes
+    ) {
+      renderNote(
+        note
+      );
     }
 
     updateEmptyState();
@@ -499,20 +1138,32 @@ import { firebaseConfig } from "./firebase-config.js";
 
   /* create sticky note */
 
-  function renderNote(note) {
-    const pos = clampPosition(
-      Number(note.x) || 8,
-      Number(note.y) || 8
-    );
+  function renderNote(
+    note
+  ) {
+    const pos =
+      clampPosition(
+        Number(note.x) || 8,
+        Number(note.y) || 8
+      );
 
-    note.x = pos.x;
-    note.y = pos.y;
+    note.x =
+      pos.x;
+
+    note.y =
+      pos.y;
 
     const element =
-      document.createElement("div");
+      document.createElement(
+        "div"
+      );
 
-    element.className = "sticky";
-    element.dataset.id = note.id;
+    element.className =
+      "sticky";
+
+    element.dataset.id =
+      note.id;
+
     element.dataset.color =
       note.color || "1";
 
@@ -523,15 +1174,21 @@ import { firebaseConfig } from "./firebase-config.js";
       note.y + "px";
 
     element.style.zIndex =
-      String(note.z || 1);
+      String(
+        note.z || 1
+      );
 
     element.style.setProperty(
       "--rotation",
-      (Number(note.rotation) || 0) +
-        "deg"
+      (
+        Number(
+          note.rotation
+        ) || 0
+      ) + "deg"
     );
 
-    element.tabIndex = 0;
+    element.tabIndex =
+      0;
 
     element.setAttribute(
       "aria-label",
@@ -539,7 +1196,9 @@ import { firebaseConfig } from "./firebase-config.js";
     );
 
     const text =
-      document.createElement("span");
+      document.createElement(
+        "span"
+      );
 
     text.className =
       "task-text";
@@ -548,7 +1207,9 @@ import { firebaseConfig } from "./firebase-config.js";
       note.text;
 
     const hint =
-      document.createElement("span");
+      document.createElement(
+        "span"
+      );
 
     hint.className =
       "hint";
@@ -557,7 +1218,9 @@ import { firebaseConfig } from "./firebase-config.js";
       "hold + drag";
 
     const editButton =
-      document.createElement("button");
+      document.createElement(
+        "button"
+      );
 
     editButton.type =
       "button";
@@ -595,7 +1258,9 @@ import { firebaseConfig } from "./firebase-config.js";
       (event) => {
         event.stopPropagation();
 
-        editNote(note.id);
+        editNote(
+          note.id
+        );
       }
     );
 
@@ -605,7 +1270,9 @@ import { firebaseConfig } from "./firebase-config.js";
       editButton
     );
 
-    board.appendChild(element);
+    board.appendChild(
+      element
+    );
 
     element.addEventListener(
       "pointerdown",
@@ -631,8 +1298,10 @@ import { firebaseConfig } from "./firebase-config.js";
       "keydown",
       (event) => {
         if (
-          event.key === "Delete" ||
-          event.key === "Backspace"
+          event.key ===
+            "Delete" ||
+          event.key ===
+            "Backspace"
         ) {
           event.preventDefault();
 
@@ -648,13 +1317,18 @@ import { firebaseConfig } from "./firebase-config.js";
 
   /* edit note */
 
-  function editNote(id) {
-    const note = notes.find(
-      (item) =>
-        item.id === id
-    );
+  function editNote(
+    id
+  ) {
+    const note =
+      notes.find(
+        (item) =>
+          item.id === id
+      );
 
-    if (!note) {
+    if (
+      !note
+    ) {
       return;
     }
 
@@ -664,14 +1338,18 @@ import { firebaseConfig } from "./firebase-config.js";
         note.text
       );
 
-    if (updated === null) {
+    if (
+      updated === null
+    ) {
       return;
     }
 
     const clean =
       updated.trim();
 
-    if (!clean) {
+    if (
+      !clean
+    ) {
       showToast(
         "Task cannot be empty"
       );
@@ -680,9 +1358,13 @@ import { firebaseConfig } from "./firebase-config.js";
     }
 
     note.text =
-      clean.slice(0, 160);
+      clean.slice(
+        0,
+        160
+      );
 
     saveNotes();
+
     renderAll();
 
     showToast(
@@ -692,7 +1374,9 @@ import { firebaseConfig } from "./firebase-config.js";
 
   /* start hold */
 
-  function startHold(event) {
+  function startHold(
+    event
+  ) {
     if (
       event.target.closest(
         ".edit-btn"
@@ -702,7 +1386,8 @@ import { firebaseConfig } from "./firebase-config.js";
     }
 
     if (
-      event.button !== undefined &&
+      event.button !==
+        undefined &&
       event.button !== 0
     ) {
       return;
@@ -711,13 +1396,16 @@ import { firebaseConfig } from "./firebase-config.js";
     const element =
       event.currentTarget;
 
-    const note = notes.find(
-      (item) =>
-        item.id ===
-        element.dataset.id
-    );
+    const note =
+      notes.find(
+        (item) =>
+          item.id ===
+          element.dataset.id
+      );
 
-    if (!note) {
+    if (
+      !note
+    ) {
       return;
     }
 
@@ -725,21 +1413,36 @@ import { firebaseConfig } from "./firebase-config.js";
       board.getBoundingClientRect();
 
     drag = {
-      id: note.id,
-      element,
-      pointerId: event.pointerId,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
+      id:
+        note.id,
+
+      element:
+        element,
+
+      pointerId:
+        event.pointerId,
+
+      startClientX:
+        event.clientX,
+
+      startClientY:
+        event.clientY,
+
       offsetX:
         event.clientX -
         boardRect.left -
         note.x,
+
       offsetY:
         event.clientY -
         boardRect.top -
         note.y,
-      active: false,
-      timer: null
+
+      active:
+        false,
+
+      timer:
+        null
     };
 
     element.setPointerCapture?.(
@@ -747,46 +1450,61 @@ import { firebaseConfig } from "./firebase-config.js";
     );
 
     drag.timer =
-      setTimeout(() => {
-        if (
-          !drag ||
-          drag.id !== note.id
-        ) {
-          return;
-        }
+      setTimeout(
+        () => {
+          if (
+            !drag ||
+            drag.id !==
+              note.id
+          ) {
+            return;
+          }
 
-        drag.active = true;
+          drag.active =
+            true;
 
-        zCounter += 1;
+          zCounter +=
+            1;
 
-        note.z =
-          zCounter;
+          note.z =
+            zCounter;
 
-        element.style.zIndex =
-          String(zCounter);
+          element.style.zIndex =
+            String(
+              zCounter
+            );
 
-        element.classList.add(
-          "holding",
-          "primed"
-        );
-
-        if (
-          navigator.vibrate
-        ) {
-          navigator.vibrate(12);
-        }
-
-        setTimeout(() => {
-          element.classList.remove(
+          element.classList.add(
+            "holding",
             "primed"
           );
-        }, 180);
-      }, HOLD_MS);
+
+          if (
+            navigator.vibrate
+          ) {
+            navigator.vibrate(
+              12
+            );
+          }
+
+          setTimeout(
+            () => {
+              element.classList.remove(
+                "primed"
+              );
+            },
+            180
+          );
+        },
+        HOLD_MS
+      );
   }
 
   /* move note */
 
-  function movePointer(event) {
+  function movePointer(
+    event
+  ) {
     if (
       !drag ||
       event.pointerId !==
@@ -799,6 +1517,7 @@ import { firebaseConfig } from "./firebase-config.js";
       Math.hypot(
         event.clientX -
           drag.startClientX,
+
         event.clientY -
           drag.startClientY
       );
@@ -816,7 +1535,9 @@ import { firebaseConfig } from "./firebase-config.js";
       return;
     }
 
-    if (!drag.active) {
+    if (
+      !drag.active
+    ) {
       return;
     }
 
@@ -825,12 +1546,16 @@ import { firebaseConfig } from "./firebase-config.js";
     const boardRect =
       board.getBoundingClientRect();
 
-    const note = notes.find(
-      (item) =>
-        item.id === drag.id
-    );
+    const note =
+      notes.find(
+        (item) =>
+          item.id ===
+          drag.id
+      );
 
-    if (!note) {
+    if (
+      !note
+    ) {
       return;
     }
 
@@ -839,6 +1564,7 @@ import { firebaseConfig } from "./firebase-config.js";
         event.clientX -
           boardRect.left -
           drag.offsetX,
+
         event.clientY -
           boardRect.top -
           drag.offsetY
@@ -869,7 +1595,9 @@ import { firebaseConfig } from "./firebase-config.js";
 
   /* drop note */
 
-  function endPointer(event) {
+  function endPointer(
+    event
+  ) {
     if (
       !drag ||
       event.pointerId !==
@@ -882,7 +1610,9 @@ import { firebaseConfig } from "./firebase-config.js";
       drag.timer
     );
 
-    if (drag.active) {
+    if (
+      drag.active
+    ) {
       const overTrash =
         isOverTrash(
           drag.element
@@ -897,14 +1627,17 @@ import { firebaseConfig } from "./firebase-config.js";
         "active"
       );
 
-      if (overTrash) {
+      if (
+        overTrash
+      ) {
         const id =
           drag.id;
 
         const element =
           drag.element;
 
-        drag = null;
+        drag =
+          null;
 
         deleteNote(
           id,
@@ -923,13 +1656,16 @@ import { firebaseConfig } from "./firebase-config.js";
         event.pointerId
       );
 
-    drag = null;
+    drag =
+      null;
   }
 
   /* cancel drag */
 
   function cancelPointer() {
-    if (!drag) {
+    if (
+      !drag
+    ) {
       return;
     }
 
@@ -955,7 +1691,8 @@ import { firebaseConfig } from "./firebase-config.js";
       /* nothing needed */
     }
 
-    drag = null;
+    drag =
+      null;
   }
 
   /* check trash collision */
@@ -964,10 +1701,12 @@ import { firebaseConfig } from "./firebase-config.js";
     noteElement
   ) {
     const noteRect =
-      noteElement.getBoundingClientRect();
+      noteElement
+        .getBoundingClientRect();
 
     const trashRect =
-      trashZone.getBoundingClientRect();
+      trashZone
+        .getBoundingClientRect();
 
     const centerX =
       noteRect.left +
@@ -1002,7 +1741,9 @@ import { firebaseConfig } from "./firebase-config.js";
           note.id === id
       );
 
-    if (index === -1) {
+    if (
+      index === -1
+    ) {
       return;
     }
 
@@ -1011,12 +1752,17 @@ import { firebaseConfig } from "./firebase-config.js";
       1
     );
 
-    if (countAsTrash) {
-      trashCount += 1;
+    if (
+      countAsTrash
+    ) {
+      trashCount +=
+        1;
     }
 
     saveNotes();
+
     saveTrashCount();
+
     updateTrashCount();
 
     element.classList.add(
@@ -1027,20 +1773,27 @@ import { firebaseConfig } from "./firebase-config.js";
       "Task thrown away"
     );
 
-    setTimeout(() => {
-      element.remove();
+    setTimeout(
+      () => {
+        element.remove();
 
-      updateEmptyState();
-    }, 330);
+        updateEmptyState();
+      },
+      330
+    );
   }
 
   /* add new note */
 
-  function addNote(text) {
+  function addNote(
+    text
+  ) {
     const clean =
       text.trim();
 
-    if (!clean) {
+    if (
+      !clean
+    ) {
       input.focus();
 
       return;
@@ -1067,9 +1820,10 @@ import { firebaseConfig } from "./firebase-config.js";
           rect.width -
             size.w -
             20,
+
           70 +
-            Math.random() *
-              randomRange
+          Math.random() *
+          randomRange
         )
       );
 
@@ -1081,42 +1835,64 @@ import { firebaseConfig } from "./firebase-config.js";
           30
       );
 
-    zCounter += 1;
+    zCounter +=
+      1;
 
     const note = {
-      id: makeId(),
+      id:
+        makeId(),
+
       text:
-        clean.slice(0, 160),
-      x,
-      y: Math.max(
-        25,
-        Math.min(
-          maxY,
-          35 +
+        clean.slice(
+          0,
+          160
+        ),
+
+      x:
+        x,
+
+      y:
+        Math.max(
+          25,
+          Math.min(
+            maxY,
+
+            35 +
             Math.random() *
-              Math.max(
-                30,
-                maxY - 35
-              )
-        )
-      ),
+            Math.max(
+              30,
+              maxY - 35
+            )
+          )
+        ),
+
       rotation:
         Math.round(
           (
-            Math.random() * 5 -
+            Math.random() *
+              5 -
             2.5
-          ) * 10
+          ) *
+          10
         ) / 10,
+
       color:
         selectedColor,
+
       z:
         zCounter
     };
 
-    notes.push(note);
+    notes.push(
+      note
+    );
 
     saveNotes();
-    renderNote(note);
+
+    renderNote(
+      note
+    );
+
     updateEmptyState();
 
     showToast(
@@ -1124,7 +1900,7 @@ import { firebaseConfig } from "./firebase-config.js";
     );
   }
 
-  /* color button events */
+  /* color buttons */
 
   for (
     const dot of colorDots
@@ -1139,7 +1915,7 @@ import { firebaseConfig } from "./firebase-config.js";
     );
   }
 
-  /* add note button */
+  /* add note */
 
   form.addEventListener(
     "submit",
@@ -1150,7 +1926,8 @@ import { firebaseConfig } from "./firebase-config.js";
         input.value
       );
 
-      input.value = "";
+      input.value =
+        "";
 
       input.focus();
     }
@@ -1181,7 +1958,9 @@ import { firebaseConfig } from "./firebase-config.js";
             `.sticky[data-id="${CSS.escape(note.id)}"]`
           );
 
-        if (element) {
+        if (
+          element
+        ) {
           element.style.left =
             note.x + "px";
 
@@ -1196,8 +1975,14 @@ import { firebaseConfig } from "./firebase-config.js";
 
   /* start app */
 
-  setSelectedColor("1");
+  setSelectedColor(
+    "1"
+  );
 
   loadGuestData();
+
+  loadBackground();
+
   renderAll();
+
 })();
